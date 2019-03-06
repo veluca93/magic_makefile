@@ -32,7 +32,7 @@ clean:
 
 .PHONY: clean all test
 
-${TARGET}/.deps/%.d: %.cc Makefile
+${TARGET}/.deps/%.d: %.cc Makefile config.mk
 	${CXX} $< -M -MM -MP -MT $(patsubst ${TARGET}/.deps/%.d,${TARGET}/build/%.o,$@) \
 		-o $@ ${CXXFLAGS}
 
