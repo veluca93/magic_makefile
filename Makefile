@@ -26,8 +26,17 @@ $(shell mkdir -p $(DIRS))
 
 all: ${BINS}
 
+test: ${RUNTEST}
+
+clean:
+	rm -rf ${TARGET}/bin/ ${TARGET}/build/ ${TARGET}/.deps/ ${TARGET}/.test_outputs/
+	[ "${TARGET}" != "." ] && rmdir ${TARGET} || true
+
+.PHONY: clean all test
+
 ${TARGET}/.deps/%.d: %.cc Makefile
-	${CXX} $< -M -MM -MP -MT $(patsubst ${TARGET}/.deps/%.d,${TARGET}/build/%.o,$@) -o $@ ${CXXFLAGS}
+	${CXX} $< -M -MM -MP -MT $(patsubst ${TARGET}/.deps/%.d,${TARGET}/build/%.o,$@) \
+		-o $@ ${CXXFLAGS}
 
 ${TARGET}/build/%_test.o: %_test.cc ${TARGET}/.deps/%_test.d
 	${CXX} $< -c -o $@ ${CXXFLAGS} $(shell pkg-config --cflags gmock gtest)
@@ -41,17 +50,9 @@ ${TARGET}/build/%_test: ${TARGET}/build/%_test.o ${OBJS}
 ${TARGET}/bin/%: ${TARGET}/build/main/%.o ${OBJS}
 	${CXX} $^ -o $@ ${CXXFLAGS} ${LDFLAGS}
 
-test: ${RUNTEST}
-
 ${TARGET}/.test_outputs/%: ${TARGET}/%
 	./$^ &> $@ || ( cat $@ && exit 1 )
 
-.PHONY: clean
-
-clean:
-	rm -rf ${TARGET}/bin/ ${TARGET}/build/ ${TARGET}/.deps/ ${TARGET}/.test_outputs/
-	[ "${TARGET}" != "." ] && rmdir ${TARGET} || true
-
-.PRECIOUS: ${DEPS}
+.PRECIOUS: ${DEPS} ${ALL_OBJS} ${TESTS}
 
 -include ${DEPS}
