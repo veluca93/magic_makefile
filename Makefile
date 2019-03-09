@@ -73,10 +73,10 @@ ${BINS}: ${TGT}bin/%: ${TGT}build/main/%.o.tar | ${TGT}.deps/main/%.od
 
 ifeq (${TGT},)
 ${RUNTEST}: .test_outputs/%: %
-	./$^ &> $@ || ( cat $@ && exit 1 )
+	./$< &> $@ || ( cat $@ && exit 1 )
 else
 ${RUNTEST}: ${TGT}.test_outputs/%: ${TGT}%
-	cd ${TGT} && ./$^ &> $@ || ( cat $@ && exit 1 )
+	cd ${TGT} && ./$< &> $@ || ( cat $@ && exit 1 )
 endif
 
 .PRECIOUS: ${DEPS} ${OBJDEPS} ${ALL_OBJS} ${TESTS}
