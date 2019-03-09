@@ -1,24 +1,27 @@
 include config.mk
 
-TARGET:=.
-ifeq (${TARGET},)
-    $(error "Cannot use TARGET as empty string!")
+ifneq (${TARGET},)
+TGT:=${TARGET}/
+TGT:=${TGT://=/}
+else
+TGT:=
 endif
+
 ALL_SRCS:=$(wildcard **/*.cc) $(wildcard *.cc)
 BIN_SRCS:=$(wildcard main/**/*.cc) $(wildcard main/*.cc)
 TEST_SRCS:=$(wildcard **/*_test.cc) $(wildcard *_test.cc)
-BINS:=$(BIN_SRCS:main/%.cc=${TARGET}/bin/%)
+BINS:=$(BIN_SRCS:main/%.cc=${TGT}bin/%)
 TEST_NAMES:=$(TEST_SRCS:%.cc=build/%)
-TESTS:=$(TEST_NAMES:%=${TARGET}/%)
-RUNTEST:=$(TEST_NAMES:%=${TARGET}/.test_outputs/%)
+TESTS:=$(TEST_NAMES:%=${TGT}%)
+RUNTEST:=$(TEST_NAMES:%=${TGT}.test_outputs/%)
 SRCS:=$(filter-out ${BIN_SRCS}, ${ALL_SRCS})
 SRCS:=$(filter-out ${TEST_SRCS}, ${SRCS})
-ALL_OBJS:=$(ALL_SRCS:%.cc=${TARGET}/build/%.o)
-OBJS:=$(SRCS:%.cc=${TARGET}/build/%.o)
-DEPS:=$(ALL_SRCS:%.cc=${TARGET}/.deps/%.d)
+ALL_OBJS:=$(ALL_SRCS:%.cc=${TGT}build/%.o)
+OBJS:=$(SRCS:%.cc=${TGT}build/%.o)
+DEPS:=$(ALL_SRCS:%.cc=${TGT}.deps/%.d)
 DIRS:=$(dir ${ALL_OBJS}) $(dir ${DEPS}) \
 	  $(dir ${BINS}) $(dir ${TESTS}) \
-	  $(dir ${RUNTEST}) ${TARGET}/build
+	  $(dir ${RUNTEST}) ${TGT}build
 
 $(shell mkdir -p $(DIRS))
 
@@ -26,29 +29,33 @@ all: ${BINS}
 
 test: ${RUNTEST}
 
+ifeq (${TGT},)
 clean:
-	rm -rf ${TARGET}/bin/ ${TARGET}/build/ ${TARGET}/.deps/ ${TARGET}/.test_outputs/
-	[ "${TARGET}" != "." ] && rmdir ${TARGET} || true
+	rm -rf ${TGT}bin/ ${TGT}build/ ${TGT}.deps/ ${TGT}.test_outputs/
+else
+clean:
+	rm -rf ${TGT}
+endif
 
 .PHONY: clean all test
 
-${TARGET}/.deps/%.d: %.cc Makefile config.mk
-	${CXX} $< -M -MM -MP -MT $(patsubst ${TARGET}/.deps/%.d,${TARGET}/build/%.o,$@) \
+${TGT}.deps/%.d: %.cc Makefile config.mk
+	${CXX} $< -M -MM -MP -MT $(patsubst ${TGT}.deps/%.d,${TGT}build/%.o,$@) \
 		-o $@ ${CXXFLAGS}
 
-${TARGET}/build/%_test.o: %_test.cc ${TARGET}/.deps/%_test.d
+${TGT}build/%_test.o: %_test.cc ${TGT}.deps/%_test.d
 	${CXX} $< -c -o $@ ${CXXFLAGS} $(shell pkg-config --cflags gmock gtest)
 
-${TARGET}/build/%.o: %.cc ${TARGET}/.deps/%.d
+${TGT}build/%.o: %.cc ${TGT}.deps/%.d
 	${CXX} $< -c -o $@ ${CXXFLAGS}
 
-${TARGET}/build/%_test: ${TARGET}/build/%_test.o ${OBJS}
+${TGT}build/%_test: ${TGT}build/%_test.o ${OBJS}
 	${CXX} $^ -o $@ ${CXXFLAGS} ${LDFLAGS} $(shell pkg-config --libs gmock gtest_main)
 
-${TARGET}/bin/%: ${TARGET}/build/main/%.o ${OBJS}
+${TGT}bin/%: ${TGT}build/main/%.o ${OBJS}
 	${CXX} $^ -o $@ ${CXXFLAGS} ${LDFLAGS}
 
-${TARGET}/.test_outputs/%: ${TARGET}/%
+${TGT}.test_outputs/%: ${TGT}%
 	./$^ &> $@ || ( cat $@ && exit 1 )
 
 .PRECIOUS: ${DEPS} ${ALL_OBJS} ${TESTS}
