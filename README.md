@@ -6,6 +6,10 @@ A magic Makefile that automatically
 
 and compiles all binaries (in the `bin` output folder) and tests (linking in `gtest` and `gmock`).
 
-Header dependencies are automatically tracked, for faster recompilations.
+Header and object dependencies are automatically tracked, for faster recompilations.
 
 Running `make test` will run all the tests.
+
+It's necessary to write a config.mk file, defining compilation flags and, if needed, extra object dependencies (by default, dependencies are detected through header inclusion).
+
+Requires `bash`, `tar` and `python`.

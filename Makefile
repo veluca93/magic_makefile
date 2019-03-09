@@ -1,5 +1,3 @@
-include config.mk
-
 ifneq (${TARGET},)
 TGT:=${TARGET}/
 TGT:=${TGT://=/}
@@ -14,14 +12,17 @@ BINS:=$(BIN_SRCS:main/%.cc=${TGT}bin/%)
 TEST_NAMES:=$(TEST_SRCS:%.cc=build/%)
 TESTS:=$(TEST_NAMES:%=${TGT}%)
 RUNTEST:=$(TEST_NAMES:%=${TGT}.test_outputs/%)
-SRCS:=$(filter-out ${BIN_SRCS}, ${ALL_SRCS})
-SRCS:=$(filter-out ${TEST_SRCS}, ${SRCS})
 ALL_OBJS:=$(ALL_SRCS:%.cc=${TGT}build/%.o)
-OBJS:=$(SRCS:%.cc=${TGT}build/%.o)
+ARCHIVES:=$(ALL_OBJS:%.o=%.o.tar)
+TEST_OBJS:=$(TEST_SRCS:%.cc=${TGT}build/%.o)
+OTHER_OBJS:=$(filter-out ${TEST_OBJS}, ${ALL_OBJS})
 DEPS:=$(ALL_SRCS:%.cc=${TGT}.deps/%.d)
+OBJDEPS:=$(DEPS:%.d=%.od)
 DIRS:=$(dir ${ALL_OBJS}) $(dir ${DEPS}) \
 	  $(dir ${BINS}) $(dir ${TESTS}) \
 	  $(dir ${RUNTEST}) ${TGT}build
+
+MAKEFILEDIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 
 $(shell mkdir -p $(DIRS))
 
@@ -37,27 +38,47 @@ clean:
 	rm -rf ${TGT}
 endif
 
+include config.mk
+
 .PHONY: clean all test
 
-${TGT}.deps/%.d: %.cc Makefile config.mk
+${DEPS}: ${TGT}.deps/%.d: %.cc Makefile config.mk
 	${CXX} $< -M -MM -MP -MT $(patsubst ${TGT}.deps/%.d,${TGT}build/%.o,$@) \
 		-o $@ ${CXXFLAGS}
 
-${TGT}build/%_test.o: %_test.cc ${TGT}.deps/%_test.d
+${OBJDEPS}: ${TGT}.deps/%.od: ${TGT}.deps/%.d ${MAKEFILEDIR}obj_deps.py
+	${MAKEFILEDIR}obj_deps.py $< "${TGT}" <<< "${ALL_OBJS}" > $@
+	
+${TEST_OBJS}: ${TGT}build/%_test.o: %_test.cc ${TGT}.deps/%_test.d ${TGT}.deps/%_test.od
 	${CXX} $< -c -o $@ ${CXXFLAGS} $(shell pkg-config --cflags gmock gtest)
 
-${TGT}build/%.o: %.cc ${TGT}.deps/%.d
+${OTHER_OBJS}: ${TGT}build/%.o: %.cc ${TGT}.deps/%.d ${TGT}.deps/%.od
 	${CXX} $< -c -o $@ ${CXXFLAGS}
 
-${TGT}build/%_test: ${TGT}build/%_test.o ${OBJS}
-	${CXX} $^ -o $@ ${CXXFLAGS} ${LDFLAGS} $(shell pkg-config --libs gmock gtest_main)
+%.o.tar: %.o
+	${MAKEFILEDIR}make_archive.sh $@ $^
 
-${TGT}bin/%: ${TGT}build/main/%.o ${OBJS}
-	${CXX} $^ -o $@ ${CXXFLAGS} ${LDFLAGS}
+${TESTS}: ${TGT}build/%_test: ${TGT}build/%_test.o.tar | ${TGT}.deps/%_test.od
+	mkdir -p ${@}_deps
+	for dep in $^; do tar xf $$dep -C ${@}_deps ; done
+	${CXX} $$(find ${@}_deps/ -type f ) -o $@ ${CXXFLAGS} ${LDFLAGS} \
+		$(shell pkg-config --libs gmock gtest_main)
+	rm -rf ${@}_deps
 
-${TGT}.test_outputs/%: ${TGT}%
+${BINS}: ${TGT}bin/%: ${TGT}build/main/%.o.tar | ${TGT}.deps/main/%.od
+	mkdir -p ${@}_deps
+	for dep in $^; do tar xf $$dep -C ${@}_deps ; done
+	${CXX} $$(find ${@}_deps/ -type f ) -o $@ ${CXXFLAGS} ${LDFLAGS}
+	rm -rf ${@}_deps
+
+ifeq (${TGT},)
+${RUNTEST}: .test_outputs/%: %
 	./$^ &> $@ || ( cat $@ && exit 1 )
+else
+${RUNTEST}: ${TGT}.test_outputs/%: ${TGT}%
+	cd ${TGT} && ./$^ &> $@ || ( cat $@ && exit 1 )
+endif
 
-.PRECIOUS: ${DEPS} ${ALL_OBJS} ${TESTS}
+.PRECIOUS: ${DEPS} ${OBJDEPS} ${ALL_OBJS} ${TESTS}
 
--include ${DEPS}
+-include ${DEPS} ${OBJDEPS}
