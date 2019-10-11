@@ -1,3 +1,5 @@
+SHELL=bash
+
 ifneq (${TARGET},)
 TGT:=${TARGET}/
 TGT:=${TGT://=/}
